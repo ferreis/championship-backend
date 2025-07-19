@@ -1,0 +1,27 @@
+# Pastas de binários e objetos do .NET
+bin/
+obj/
+
+# Arquivos de usuário e cache do Visual Studio (muito comuns em projetos .NET)
+.vs/
+*.suo
+*.user
+*.log
+*.pdb
+*.sbr
+*.bsc
+
+# Pastas de pacote e dependências (se você tiver uma pasta 'packages' raiz, por exemplo)
+packages/
+
+# Resultados de testes
+TestResults/
+
+# Arquivos de backup e temporários (gerais)
+*~
+*.bak
+*.tmp
+
+# Arquivos específicos do sistema operacional (se você ou seu colega usarem)
+.DS_Store # macOS
+Thumbs.db # Windows
