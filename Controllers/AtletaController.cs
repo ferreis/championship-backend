@@ -7,10 +7,15 @@ using Microsoft.AspNetCore.Mvc;
 public class AtletaController : BaseController<AtletaService>
 {
     [HttpGet]
-    public IActionResult GetAtletas([FromQuery] int? competicaoId)
+    public ActionResult<PagedResultDto<AtletaComEquipeDto>> GetAtletas(
+        [FromQuery] int? competicaoId,
+        [FromQuery] int? equipeId,
+        [FromQuery] int? atletaId,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10)
     {
-        var lista = _service.ListarComEquipes(competicaoId);
-        return Ok(lista);
+        var pagedResult = _service.ListarComEquipes(competicaoId, equipeId, atletaId, pageNumber, pageSize);
+        return Ok(pagedResult);
     }
 
     [HttpPost]

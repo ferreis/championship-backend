@@ -117,63 +117,100 @@ public class AtletaService
         command.Parameters.AddWithValue("$competicaoId", dto.CompeticaoId);
         command.ExecuteNonQuery();
     }
-
-    public List<AtletaComEquipeDto> ListarComEquipes(int? competicaoId)
+    public PagedResultDto<AtletaComEquipeDto> ListarComEquipes(int? competicaoId, int? equipeId, int? atletaId, int pageNumber, int pageSize)
     {
-        var lista = new List<AtletaComEquipeDto>();
+        var result = new PagedResultDto<AtletaComEquipeDto>();
+        var parameters = new Dictionary<string, object>();
 
         using var connection = new SqliteConnection(_connectionString);
         connection.Open();
 
-        var command = connection.CreateCommand();
-
-        // CORREÇÃO: A consulta agora filtra por competicao_id e seleciona a coluna correta
-        var sql = @"
-            SELECT
-                a.id AS atleta_id, a.nome, a.cpf, a.genero, a.data_nascimento, a.pais_id,
-                p.nacionalidade AS pais_nacionalidade,
-                e.id as equipe_id, e.nome AS equipe_nome, e.tipo AS equipe_tipo,
-                s.nome AS equipe_estado_nome, pe.nacionalidade AS equipe_nacionalidade_nome,
-                ae.competicao_id
-            FROM Atleta a
-            INNER JOIN Pais p ON a.pais_id = p.id
-            LEFT JOIN Atleta_Equipe ae ON a.id = ae.atleta_id
-            LEFT JOIN Equipe e ON ae.equipe_id = e.id
-            LEFT JOIN Estado s ON e.estado_id = s.id
-            LEFT JOIN Pais pe ON e.pais_id = pe.id";
+        // 1. CONSTRUIR A CONSULTA PARA CONTAR O TOTAL DE ITENS FILTRADOS
+        var countSql = @"
+        SELECT COUNT(DISTINCT ae.id)
+        FROM Atleta_Equipe ae
+        INNER JOIN Atleta a ON ae.atleta_id = a.id
+        INNER JOIN Equipe e ON ae.equipe_id = e.id
+        INNER JOIN Competicao c ON ae.competicao_id = c.id
+        WHERE 1=1";
 
         if (competicaoId.HasValue)
         {
-            sql += " WHERE ae.competicao_id = $competicaoId OR ae.competicao_id IS NULL";
-            command.Parameters.AddWithValue("$competicaoId", competicaoId.Value);
+            countSql += " AND ae.competicao_id = $competicaoId";
+            parameters["$competicaoId"] = competicaoId.Value;
         }
-
-        command.CommandText = sql;
-
-        using var reader = command.ExecuteReader();
-        while (reader.Read())
+        if (equipeId.HasValue)
         {
-            lista.Add(new AtletaComEquipeDto
-            {
-                AtletaId = reader.GetInt32(reader.GetOrdinal("atleta_id")),
-                Nome = reader.GetString(reader.GetOrdinal("nome")),
-                Cpf = reader.GetString(reader.GetOrdinal("cpf")),
-                Genero = reader.GetString(reader.GetOrdinal("genero")),
-                DataNascimento = DateTime.Parse(reader.GetString(reader.GetOrdinal("data_nascimento"))),
-                PaisId = reader.GetInt32(reader.GetOrdinal("pais_id")),
-                Nacionalidade = reader.GetString(reader.GetOrdinal("pais_nacionalidade")),
-                EquipeId = reader.IsDBNull(reader.GetOrdinal("equipe_id")) ? null : (int?)reader.GetInt32(reader.GetOrdinal("equipe_id")),
-                EquipeNome = reader.IsDBNull(reader.GetOrdinal("equipe_nome")) ? null : reader.GetString(reader.GetOrdinal("equipe_nome")),
-                EquipeTipo = reader.IsDBNull(reader.GetOrdinal("equipe_tipo")) ? null : reader.GetString(reader.GetOrdinal("equipe_tipo")),
-                EquipeEstado = reader.IsDBNull(reader.GetOrdinal("equipe_estado_nome")) ? null : reader.GetString(reader.GetOrdinal("equipe_estado_nome")),
-                EquipeNacionalidade = reader.IsDBNull(reader.GetOrdinal("equipe_nacionalidade_nome")) ? null : reader.GetString(reader.GetOrdinal("equipe_nacionalidade_nome")),
-                // CORREÇÃO: Mapeando a coluna correta do banco para a propriedade do DTO
-                // Assumindo que a propriedade no DTO se chama 'CompeticaoId'
-                CompeticaoId = reader.IsDBNull(reader.GetOrdinal("competicao_id")) ? null : (int?)reader.GetInt32(reader.GetOrdinal("competicao_id"))
-            });
+            countSql += " AND ae.equipe_id = $equipeId";
+            parameters["$equipeId"] = equipeId.Value;
+        }
+        if (atletaId.HasValue)
+        {
+            countSql += " AND ae.atleta_id = $atletaId";
+            parameters["$atletaId"] = atletaId.Value;
         }
 
-        return lista;
+        var countCommand = connection.CreateCommand();
+        countCommand.CommandText = countSql;
+        foreach (var p in parameters) { countCommand.Parameters.AddWithValue(p.Key, p.Value); }
+
+        // Executa a contagem e guarda o total
+        result.TotalCount = Convert.ToInt32(countCommand.ExecuteScalar());
+
+
+        // 2. CONSTRUIR A CONSULTA PARA BUSCAR OS DADOS DA PÁGINA ATUAL
+        var dataSql = @"
+        SELECT
+            a.id AS atleta_id, a.nome, a.cpf, a.genero, a.data_nascimento, a.pais_id,
+            p.nacionalidade AS pais_nacionalidade,
+            e.id as equipe_id, e.nome AS equipe_nome, e.tipo AS equipe_tipo,
+            s.nome AS equipe_estado_nome, pe.nacionalidade AS equipe_nacionalidade_nome,
+            ae.competicao_id
+        FROM Atleta_Equipe ae
+        INNER JOIN Atleta a ON ae.atleta_id = a.id
+        INNER JOIN Equipe e ON ae.equipe_id = e.id
+        INNER JOIN Competicao c ON ae.competicao_id = c.id
+        INNER JOIN Pais p ON a.pais_id = p.id
+        LEFT JOIN Estado s ON e.estado_id = s.id
+        LEFT JOIN Pais pe ON e.pais_id = pe.id
+        WHERE 1=1";
+
+        if (competicaoId.HasValue) { dataSql += " AND ae.competicao_id = $competicaoId"; }
+        if (equipeId.HasValue) { dataSql += " AND ae.equipe_id = $equipeId"; }
+        if (atletaId.HasValue) { dataSql += " AND ae.atleta_id = $atletaId"; }
+
+        dataSql += " ORDER BY c.nome, e.nome, a.nome LIMIT $pageSize OFFSET $offset";
+        parameters["$pageSize"] = pageSize;
+        parameters["$offset"] = (pageNumber - 1) * pageSize;
+
+        var dataCommand = connection.CreateCommand();
+        dataCommand.CommandText = dataSql;
+        foreach (var p in parameters) { dataCommand.Parameters.AddWithValue(p.Key, p.Value); }
+
+        using (var reader = dataCommand.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                result.Items.Add(new AtletaComEquipeDto
+                {
+                    AtletaId = reader.GetInt32(reader.GetOrdinal("atleta_id")),
+                    Nome = reader.GetString(reader.GetOrdinal("nome")),
+                    Cpf = reader.GetString(reader.GetOrdinal("cpf")),
+                    Genero = reader.GetString(reader.GetOrdinal("genero")),
+                    DataNascimento = DateTime.Parse(reader.GetString(reader.GetOrdinal("data_nascimento"))),
+                    PaisId = reader.GetInt32(reader.GetOrdinal("pais_id")),
+                    Nacionalidade = reader.GetString(reader.GetOrdinal("pais_nacionalidade")),
+                    EquipeId = reader.IsDBNull(reader.GetOrdinal("equipe_id")) ? null : (int?)reader.GetInt32(reader.GetOrdinal("equipe_id")),
+                    EquipeNome = reader.IsDBNull(reader.GetOrdinal("equipe_nome")) ? null : reader.GetString(reader.GetOrdinal("equipe_nome")),
+                    EquipeTipo = reader.IsDBNull(reader.GetOrdinal("equipe_tipo")) ? null : reader.GetString(reader.GetOrdinal("equipe_tipo")),
+                    EquipeEstado = reader.IsDBNull(reader.GetOrdinal("equipe_estado_nome")) ? null : reader.GetString(reader.GetOrdinal("equipe_estado_nome")),
+                    EquipeNacionalidade = reader.IsDBNull(reader.GetOrdinal("equipe_nacionalidade_nome")) ? null : reader.GetString(reader.GetOrdinal("equipe_nacionalidade_nome")),
+                    CompeticaoId = reader.IsDBNull(reader.GetOrdinal("competicao_id")) ? null : (int?)reader.GetInt32(reader.GetOrdinal("competicao_id"))
+                });
+            }
+        }
+
+        return result;
     }
 
     public void Deletar(int id)
