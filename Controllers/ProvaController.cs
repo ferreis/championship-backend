@@ -16,26 +16,16 @@ public class ProvaController : ControllerBase
         _service = new ProvaService(ConnectionString);
     }
 
-    /// <summary>
-    /// Retorna uma lista de todas as provas.
-    /// GET /api/Prova
-    /// </summary>
     [HttpGet]
-    public ActionResult<List<Prova>> Get()
+    public ActionResult<PagedResultDto<Prova>> Get([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
     {
-        var provas = _service.Listar();
-        if (provas == null || provas.Count == 0)
+        var pagedResult = _service.ListarPaginado(pageNumber, pageSize);
+        if (pagedResult == null || pagedResult.Items.Count == 0)
         {
             return NotFound("Nenhuma prova encontrada.");
         }
-        return Ok(provas);
+        return Ok(pagedResult);
     }
-
-    /// <summary>
-    /// Obtém uma prova específica pelo seu ID.
-    /// GET /api/Prova/{id}
-    /// </summary>
-    /// <param name="id">O ID da prova.</param>
     [HttpGet("{id}")]
     public ActionResult<Prova> GetById(int id)
     {
@@ -73,8 +63,8 @@ public class ProvaController : ControllerBase
         try
         {
             // O serviço agora retorna o ID da prova recém-criada
-            int newId = _service.Adicionar(novaProva); 
-            
+            int newId = _service.Adicionar(novaProva);
+
             // Obtém o objeto completo da prova com o ID preenchido para a resposta CreatedAtAction
             var provaCriada = _service.ObterPorId(newId);
             if (provaCriada == null)
@@ -92,11 +82,6 @@ public class ProvaController : ControllerBase
         }
     }
 
-    /// <summary>
-    /// Atualiza parcialmente os dados de uma prova existente.
-    /// PATCH /api/Prova
-    /// </summary>
-    /// <param name="provaDto">Os dados da prova a serem atualizados.</param>
     [HttpPatch]
     public IActionResult Patch([FromBody] ProvaUpdateDto provaDto)
     {
@@ -123,7 +108,7 @@ public class ProvaController : ControllerBase
         {
             _service.Atualizar(existente);
             // Retorna o objeto atualizado do DB para garantir que reflete o estado salvo
-            return Ok(_service.ObterPorId(existente.Id)); 
+            return Ok(_service.ObterPorId(existente.Id));
         }
         catch (Exception ex)
         {
