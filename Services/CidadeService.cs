@@ -6,15 +6,26 @@ public class CidadeService
     private readonly string _connectionString;
     public CidadeService(string connectionString) => _connectionString = connectionString;
 
-    public void Adicionar(Cidade cidade)
+    // Adicione estes métodos à classe CidadeService
+    public void Atualizar(int id, CidadeUpdateDto dto)
     {
         using var connection = new SqliteConnection(_connectionString);
         connection.Open();
-
         var command = connection.CreateCommand();
-        command.CommandText = "INSERT INTO Cidade (nome, estado_id) VALUES ($nome, $estado_id)";
-        command.Parameters.AddWithValue("$nome", cidade.Nome);
-        command.Parameters.AddWithValue("$estado_id", cidade.EstadoId);
+        command.CommandText = @"UPDATE Cidade SET nome = COALESCE($nome, nome), estado_id = COALESCE($estado_id, estado_id) WHERE id = $id";
+        command.Parameters.AddWithValue("$id", id);
+        command.Parameters.AddWithValue("$nome", (object?)dto.Nome ?? DBNull.Value);
+        command.Parameters.AddWithValue("$estado_id", (object?)dto.EstadoId ?? DBNull.Value);
+        command.ExecuteNonQuery();
+    }
+
+    public void Deletar(int id)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+        var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM Cidade WHERE id = $id";
+        command.Parameters.AddWithValue("$id", id);
         command.ExecuteNonQuery();
     }
 

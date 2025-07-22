@@ -6,19 +6,33 @@ public class EstadoService
     private readonly string _connectionString;
     public EstadoService(string connectionString) => _connectionString = connectionString;
 
-    public void Adicionar(Estado estado)
+    // Adicione estes métodos à classe EstadoService
+    public void Atualizar(int id, EstadoUpdateDto dto)
     {
         using var connection = new SqliteConnection(_connectionString);
         connection.Open();
-
         var command = connection.CreateCommand();
-        command.CommandText = "INSERT INTO Estado (nome, sigla, pais_id) VALUES ($nome, $sigla, $pais_id)";
-        command.Parameters.AddWithValue("$nome", estado.Nome);
-        command.Parameters.AddWithValue("$sigla", estado.Sigla);
-        command.Parameters.AddWithValue("$pais_id", estado.PaisId);
+        command.CommandText = @"UPDATE Estado SET nome = COALESCE($nome, nome), sigla = COALESCE($sigla, sigla), pais_id = COALESCE($pais_id, pais_id) WHERE id = $id";
+        command.Parameters.AddWithValue("$id", id);
+        command.Parameters.AddWithValue("$nome", (object?)dto.Nome ?? DBNull.Value);
+        command.Parameters.AddWithValue("$sigla", (object?)dto.Sigla ?? DBNull.Value);
+        command.Parameters.AddWithValue("$pais_id", (object?)dto.PaisId ?? DBNull.Value);
         command.ExecuteNonQuery();
     }
 
+    public void Deletar(int id)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+        var command = connection.CreateCommand();
+        // Adicionar lógica para deletar cidades dependentes primeiro
+        command.CommandText = "DELETE FROM Cidade WHERE estado_id = $id";
+        command.Parameters.AddWithValue("$id", id);
+        command.ExecuteNonQuery();
+
+        command.CommandText = "DELETE FROM Estado WHERE id = $id";
+        command.ExecuteNonQuery();
+    }
     public List<Estado> Listar()
     {
         var lista = new List<Estado>();
